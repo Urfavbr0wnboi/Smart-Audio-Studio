@@ -22,16 +22,24 @@ Track* Project::findTrackForEdit (int trackId) noexcept
     return const_cast<Track*> (std::as_const (*this).findTrack (trackId));
 }
 
-int Project::addTrack (const juce::String& name)
+int Project::addTrack (const juce::String& name, int colourIndex)
 {
     Track track;
     track.id = nextId++;
     track.name = name.isNotEmpty() ? name : "Track " + juce::String (tracks.size() + 1);
-    track.colourIndex = nextColourIndex++;
+    track.colourIndex = colourIndex >= 0 ? colourIndex : nextColourIndex;
+    nextColourIndex = track.colourIndex + 1;
     tracks.push_back (std::move (track));
 
     publish();
     return tracks.back().id;
+}
+
+void Project::clear()
+{
+    tracks.clear();
+    nextColourIndex = 0;
+    publish();
 }
 
 void Project::removeTrack (int trackId)
@@ -119,6 +127,7 @@ int Project::addClip (int trackId, const juce::String& name, SharedAudio audio, 
     clip.startSeconds = std::max (0.0, startSeconds);
     clip.sourceAudio = audio;
     clip.sourceSampleRate = audioSampleRate;
+    clip.sourceLength = audio->getNumSamples();
     clip.playbackAudio = AudioFileLoader::resample (audio, audioSampleRate, sampleRate);
     clip.waveform = std::make_shared<Waveform> (*audio);
     track->clips.push_back (std::move (clip));
@@ -132,6 +141,26 @@ void Project::moveClip (int trackId, int clipId, double newStartSeconds)
     if (auto* clip = findClipForEdit (trackId, clipId))
     {
         clip->startSeconds = std::max (0.0, newStartSeconds);
+        publish();
+    }
+}
+
+void Project::renameClip (int trackId, int clipId, const juce::String& newName)
+{
+    if (auto* clip = findClipForEdit (trackId, clipId); clip != nullptr && newName.trim().isNotEmpty())
+    {
+        clip->name = newName.trim();
+        listeners.call (&Listener::projectStructureChanged);
+    }
+}
+
+void Project::setClipSourceRange (int trackId, int clipId, juce::int64 offset, juce::int64 length)
+{
+    if (auto* clip = findClipForEdit (trackId, clipId))
+    {
+        const auto available = (juce::int64) clip->sourceAudio->getNumSamples();
+        clip->sourceOffset = juce::jlimit<juce::int64> (0, available, offset);
+        clip->sourceLength = juce::jlimit<juce::int64> (0, available - clip->sourceOffset, length);
         publish();
     }
 }
@@ -206,7 +235,18 @@ void Project::publish()
         playbackTrack.params = track.params;
 
         for (const auto& clip : track.clips)
-            playbackTrack.clips.push_back ({ clip.playbackAudio, (juce::int64) std::llround (clip.startSeconds * sampleRate) });
+        {
+            // The playback audio may be at a different rate from the source, so convert the range.
+            const auto ratio = sampleRate / clip.sourceSampleRate;
+            const auto available = (juce::int64) clip.playbackAudio->getNumSamples();
+            const auto offset = std::min (available, (juce::int64) std::llround ((double) clip.sourceOffset * ratio));
+            const auto length = std::min (available - offset, (juce::int64) std::llround ((double) clip.sourceLength * ratio));
+
+            playbackTrack.clips.push_back ({ clip.playbackAudio,
+                                             (juce::int64) std::llround (clip.startSeconds * sampleRate),
+                                             offset,
+                                             length });
+        }
     }
 
     mixer.setGraph (std::move (graph));

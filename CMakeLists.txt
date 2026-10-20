@@ -23,6 +23,8 @@ set(SAS_ENGINE_SOURCES
     Source/Engine/AudioFileLoader.cpp
     Source/Engine/MixEngine.cpp
     Source/Engine/Project.cpp
+    Source/Engine/ProjectFile.cpp
+    Source/Engine/Recorder.cpp
     Source/Engine/Waveform.cpp)
 
 set(SAS_COMMON_DEFINITIONS
@@ -46,6 +48,7 @@ target_sources(SmartAudioStudio PRIVATE
     ${SAS_ENGINE_SOURCES}
     Source/Main.cpp
     Source/MainComponent.cpp
+    Source/ProjectDocument.cpp
     Source/Engine/AudioEngine.cpp
     Source/UI/BrowserPanel.cpp
     Source/UI/ChannelStrip.cpp
@@ -82,7 +85,9 @@ if (SAS_BUILD_TESTS)
         Tests/TestMain.cpp
         Tests/AudioFileLoaderTests.cpp
         Tests/MixEngineTests.cpp
+        Tests/ProjectFileTests.cpp
         Tests/ProjectTests.cpp
+        Tests/RecorderTests.cpp
         Tests/WaveformTests.cpp)
 
     target_include_directories(SmartAudioStudioTests PRIVATE Source)

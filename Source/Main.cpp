@@ -31,11 +31,14 @@ public:
 
     void systemRequestedQuit() override
     {
-        quit();
+        if (auto* content = mainWindow != nullptr ? dynamic_cast<MainComponent*> (mainWindow->getContentComponent()) : nullptr)
+            content->requestQuit ([] { JUCEApplication::quit(); });
+        else
+            quit();
     }
 
 private:
-    /** Opens any audio files named on the command line. */
+    /** Opens any projects or audio files named on the command line. */
     void openFiles (const juce::String& commandLine)
     {
         juce::Array<juce::File> files;
@@ -59,14 +62,18 @@ private:
             : DocumentWindow (name, Theme::background, DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar (true);
-            setContentOwned (new MainComponent(), true);
+
+            auto content = std::make_unique<MainComponent>();
+            content->onTitleChanged = [this] (const juce::String& title) { setName (title); };
+            content->refreshTitle();
+            setContentOwned (content.release(), true);
             setResizable (true, true);
             setResizeLimits (900, 600, 10000, 10000);
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
 
-            if (auto* content = getContentComponent())
-                content->grabKeyboardFocus();
+            if (auto* mainComponent = getContentComponent())
+                mainComponent->grabKeyboardFocus();
         }
 
         void closeButtonPressed() override

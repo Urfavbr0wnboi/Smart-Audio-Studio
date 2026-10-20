@@ -26,7 +26,7 @@ public:
                 ramp.setSample (1, i, -0.25f);
             }
 
-            writeWav (tempWav.getFile(), ramp, 48000.0, 3);
+            expect (test::writeWav (tempWav.getFile(), ramp, 48000.0, 3));
 
             DecodedAudio decoded;
             const auto result = AudioFileLoader::load (formats, tempWav.getFile(), decoded);
@@ -69,27 +69,6 @@ public:
             expectEquals (converted->getNumSamples(), 48000);
             expectWithinAbsoluteError (converted->getSample (1, 24000), 0.5f, 1.0e-4f);
         }
-    }
-
-private:
-    void writeWav (const juce::File& file, const juce::AudioBuffer<float>& audio, double sampleRate, int numChannels)
-    {
-        file.deleteFile();
-        std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
-
-        juce::AudioBuffer<float> multiChannel (numChannels, audio.getNumSamples());
-
-        for (int ch = 0; ch < numChannels; ++ch)
-            multiChannel.copyFrom (ch, 0, audio, std::min (ch, audio.getNumChannels() - 1), 0, audio.getNumSamples());
-
-        juce::WavAudioFormat wav;
-        auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions{}.withSampleRate (sampleRate)
-                                                                                  .withNumChannels (numChannels)
-                                                                                  .withBitsPerSample (24));
-        expect (writer != nullptr);
-
-        if (writer != nullptr)
-            writer->writeFromAudioSampleBuffer (multiChannel, 0, multiChannel.getNumSamples());
     }
 };
 

@@ -65,6 +65,29 @@ public:
             expectEquals (output.getMagnitude (0, 50, 50), 0.0f);
         }
 
+        beginTest ("A clip plays only its source range");
+        {
+            auto ramp = std::make_shared<juce::AudioBuffer<float>> (1, 1000);
+
+            for (int i = 0; i < 1000; ++i)
+                ramp->setSample (0, i, (float) i / 1000.0f);
+
+            auto graph = std::make_shared<PlaybackGraph>();
+            auto& track = graph->tracks.emplace_back();
+            track.params = std::make_shared<ChannelParams>();
+            track.clips.push_back ({ ramp, 10, 500, 100 });   // samples 500..599, placed at 10
+
+            MixEngine engine;
+            engine.setGraph (graph);
+            engine.play();
+            auto output = render (engine, 200);
+
+            expectEquals (output.getSample (0, 9), 0.0f);
+            expectEquals (output.getSample (0, 10), 0.5f);
+            expectEquals (output.getSample (0, 109), 0.599f);
+            expectEquals (output.getMagnitude (0, 110, 90), 0.0f);
+        }
+
         beginTest ("Overlapping tracks are summed, with gain and pan");
         {
             MixEngine engine;
@@ -163,7 +186,7 @@ private:
         {
             auto& track = graph->tracks.emplace_back();
             track.params = std::make_shared<ChannelParams>();
-            track.clips.push_back ({ test::makeConstantAudio (clip.channels, clip.length, clip.level), clip.start });
+            track.clips.push_back ({ test::makeConstantAudio (clip.channels, clip.length, clip.level), clip.start, 0, clip.length });
         }
 
         return graph;

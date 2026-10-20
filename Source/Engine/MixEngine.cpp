@@ -114,14 +114,14 @@ void MixEngine::mixClipsInto (const PlaybackGraph::Track& track, juce::int64 blo
     for (const auto& clip : track.clips)
     {
         const auto& audio = *clip.audio;
-        const auto clipEnd = clip.startSample + audio.getNumSamples();
+        const auto clipEnd = clip.startSample + clip.length;
         const auto overlapStart = std::max (blockStart, clip.startSample);
         const auto overlapEnd   = std::min (blockEnd, clipEnd);
 
         if (overlapEnd <= overlapStart)
             continue;
 
-        const auto sourceOffset = (int) (overlapStart - clip.startSample);
+        const auto sourceOffset = (int) (clip.sourceOffset + overlapStart - clip.startSample);
         const auto destOffset   = (int) (overlapStart - blockStart);
         const auto count        = (int) (overlapEnd - overlapStart);
 

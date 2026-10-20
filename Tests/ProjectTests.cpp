@@ -103,6 +103,30 @@ public:
             expectEquals (project.findClip (second, clip)->startSeconds, 2.5);
         }
 
+        beginTest ("A clip's source range is clamped and converted to the playback rate");
+        {
+            MixEngine engine;
+            Project project (engine);
+            const auto track = project.addTrack();
+            auto ramp = std::make_shared<juce::AudioBuffer<float>> (1, 48000);
+
+            for (int i = 0; i < ramp->getNumSamples(); ++i)
+                ramp->setSample (0, i, (float) i / 48000.0f);
+
+            const auto clipId = project.addClip (track, "Ramp", ramp, 48000.0, 0.0);
+            expectEquals (project.findClip (track, clipId)->sourceLength, (juce::int64) 48000);
+
+            project.setClipSourceRange (track, clipId, 24000, 1000000);
+            const auto* clip = project.findClip (track, clipId);
+            expectEquals (clip->sourceOffset, (juce::int64) 24000);
+            expectEquals (clip->sourceLength, (juce::int64) 24000);
+            expectEquals (clip->getLengthSeconds(), 0.5);
+
+            // The engine runs at 44.1 kHz, so the clip should start halfway up the ramp.
+            engine.play();
+            expectWithinAbsoluteError (render (engine).getSample (0, 10), 0.5f, 0.001f);
+        }
+
         beginTest ("Clips cannot start before zero");
         {
             MixEngine engine;

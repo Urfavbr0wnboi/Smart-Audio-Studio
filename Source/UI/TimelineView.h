@@ -38,6 +38,15 @@ public:
     /** Removes the selected clip. Returns false if no clip was selected. */
     bool deleteSelectedClip();
 
+    /** The track that was last clicked, or 0 if none is selected. */
+    int getSelectedTrackId() const noexcept { return selectedTrackId; }
+    void selectTrack (int trackId);
+
+    /** Shows a recording in progress on a track, from `startSeconds` to the
+        playhead. Pass 0 to hide it.
+    */
+    void showRecording (int trackId, double startSeconds);
+
     void zoom (double factor);
 
     // juce::Component
@@ -83,7 +92,6 @@ private:
 
     void zoomAround (double factor, float anchorLaneX);
     void confirmRemoveTrack (int trackId);
-    void selectTrack (int trackId);
     void selectClip (int trackId, int clipId);
     void setScrollSeconds (double seconds);
     void setScrollY (int y);
@@ -116,6 +124,8 @@ private:
     int scrollY = 0;
 
     int selectedTrackId = 0;
+    int recordingTrackId = 0;
+    double recordingStartSeconds = 0.0;
     int selectedClipTrackId = 0, selectedClipId = 0;
 
     std::optional<DropLocation> dropTarget;

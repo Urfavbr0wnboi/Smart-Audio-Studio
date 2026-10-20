@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/AudioEngine.h"
+#include "ProjectDocument.h"
 #include "UI/BrowserPanel.h"
 #include "UI/MixerView.h"
 #include "UI/SettingsOverlay.h"
@@ -16,14 +17,22 @@ namespace sas
 */
 class MainComponent final : public juce::Component,
                             public juce::DragAndDropContainer,
-                            private juce::ChangeListener
+                            private juce::ChangeListener,
+                            private juce::FocusChangeListener
 {
 public:
     MainComponent();
     ~MainComponent() override;
 
-    /** Places audio files on new tracks at the start of the song, e.g. files passed on the command line. */
+    /** Called with the text for the window's title bar. */
+    std::function<void (const juce::String&)> onTitleChanged;
+    void refreshTitle();
+
+    /** Opens a project, or places audio files on new tracks, e.g. files passed on the command line. */
     void openFiles (const juce::Array<juce::File>& files);
+
+    /** Asks about unsaved changes, then calls `quit` unless the user cancels. */
+    void requestQuit (std::function<void()> quit);
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -31,13 +40,21 @@ public:
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    void globalFocusChanged (juce::Component* focusedComponent) override;
     void refreshDeviceStatus();
     void chooseFilesToImport();
+    void showFileMenu (juce::Component& button);
     void setSettingsVisible (bool);
 
-    AudioEngine engine;
+    void togglePlayback();
+    void stop();
+    void toggleRecording();
+    void stopRecording();
 
-    TransportBar transport { engine.getMixer() };
+    AudioEngine engine;
+    ProjectDocument document { engine };
+
+    TransportBar transport { engine.getMixer(), engine.getInputLevels() };
     BrowserPanel browser { engine.getProject().getFormatManager() };
     TimelineView timeline { engine.getProject(), engine.getMixer() };
     MixerView mixer { engine.getProject(), engine.getMixer() };
@@ -47,6 +64,7 @@ private:
     std::unique_ptr<juce::FileChooser> importChooser;
 
     bool browserVisible = true, mixerVisible = true;
+    int trackCreatedForRecording = 0;
 
     static constexpr int transportHeight = 52;
     static constexpr int browserWidth = 250;

@@ -357,7 +357,7 @@ private:
 
         for (int px = firstPixel; px < lastPixel; ++px)
         {
-            const auto start = (juce::int64) (((float) px - x1) * samplesPerPixel);
+            const auto start = clip.sourceOffset + (juce::int64) (((float) px - x1) * samplesPerPixel);
             const auto range = clip.waveform->getRange (start, start + (juce::int64) samplesPerPixel + 1);
             const auto top    = centreY - juce::jlimit (-1.0f, 1.0f, range.getEnd())   * halfHeight;
             const auto bottom = centreY - juce::jlimit (-1.0f, 1.0f, range.getStart()) * halfHeight;
@@ -459,6 +459,14 @@ bool TimelineView::deleteSelectedClip()
 
 void TimelineView::confirmRemoveTrack (int trackId)
 {
+    if (trackId == recordingTrackId)
+    {
+        if (onStatusMessage)
+            onStatusMessage ("Stop recording before deleting this track.", true);
+
+        return;
+    }
+
     const auto* track = project.findTrack (trackId);
 
     if (track == nullptr)
@@ -471,7 +479,7 @@ void TimelineView::confirmRemoveTrack (int trackId)
     }
 
     const auto options = juce::MessageBoxOptions::makeOptionsOkCancel (
-        juce::MessageBoxIconType::QuestionIcon,
+        juce::MessageBoxIconType::NoIcon,
         "Delete \"" + track->name + "\"?",
         "This track and its " + juce::String (track->clips.size()) + " clip(s) will be removed. This cannot be undone yet.",
         "Delete", "Cancel", this);
@@ -481,6 +489,13 @@ void TimelineView::confirmRemoveTrack (int trackId)
         if (result == 1)
             project.removeTrack (trackId);
     });
+}
+
+void TimelineView::showRecording (int trackId, double startSeconds)
+{
+    recordingTrackId = trackId;
+    recordingStartSeconds = startSeconds;
+    repaint();
 }
 
 void TimelineView::zoom (double factor)
@@ -539,6 +554,22 @@ void TimelineView::paintOverChildren (juce::Graphics& g)
     }
 
     const auto playheadX = getPlayheadX();
+
+    if (const auto row = std::find (rowTrackIds.begin(), rowTrackIds.end(), recordingTrackId); row != rowTrackIds.end())
+    {
+        const auto rowIndex = (int) std::distance (rowTrackIds.begin(), row);
+        const auto startX = (float) lane.getX() + secondsToLaneX (recordingStartSeconds);
+        const auto area = juce::Rectangle<float>::leftTopRightBottom (startX, (float) (lane.getY() + rowIndex * trackHeight - scrollY + 3),
+                                                                      std::max (startX, playheadX), (float) (lane.getY() + (rowIndex + 1) * trackHeight - scrollY - 4))
+                              .getIntersection (lane.toFloat());
+
+        g.setColour (Theme::error.withAlpha (0.3f));
+        g.fillRoundedRectangle (area, 4.0f);
+        g.setColour (Theme::error);
+        g.drawRoundedRectangle (area, 4.0f, 1.5f);
+        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+        g.drawText ("Recording", area.reduced (6.0f, 2.0f), juce::Justification::topLeft, true);
+    }
 
     if (playheadX >= (float) lane.getX() && playheadX <= (float) lane.getRight())
     {
@@ -675,6 +706,9 @@ void TimelineView::projectStructureChanged()
     if (project.findTrack (selectedTrackId) == nullptr)
         selectedTrackId = 0;
 
+    if (project.findTrack (recordingTrackId) == nullptr)
+        recordingTrackId = 0;
+
     if (project.findClip (selectedClipTrackId, selectedClipId) == nullptr)
         selectedClipTrackId = selectedClipId = 0;
 
@@ -713,7 +747,12 @@ void TimelineView::timerCallback()
 
     lastPosition = position;
 
-    if (! juce::approximatelyEqual (x, lastPlayheadX))
+    if (recordingTrackId != 0)
+    {
+        repaint();   // the recording region grows with the playhead
+        lastPlayheadX = x;
+    }
+    else if (! juce::approximatelyEqual (x, lastPlayheadX))
     {
         repaint ((int) lastPlayheadX - 6, 0, 13, getHeight());
         repaint ((int) x - 6, 0, 13, getHeight());
@@ -815,6 +854,10 @@ void TimelineView::setScrollY (int y)
 
 void TimelineView::seekTo (double seconds)
 {
+    // Moving the playhead mid-take would put the take out of step with what was heard.
+    if (recordingTrackId != 0)
+        return;
+
     mixer.setPosition ((juce::int64) std::llround (std::max (0.0, seconds) * mixer.getSampleRate()));
 }
 

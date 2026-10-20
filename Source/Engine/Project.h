@@ -10,7 +10,11 @@
 namespace sas
 {
 
-/** A piece of audio placed on a track's timeline. */
+/** A piece of audio placed on a track's timeline.
+
+    A clip plays a section of its source audio: `sourceLength` samples starting
+    `sourceOffset` samples into the file. The file itself is never modified.
+*/
 struct Clip
 {
     int id = 0;
@@ -20,10 +24,12 @@ struct Clip
 
     SharedAudio sourceAudio;              // as decoded from the file
     double sourceSampleRate = 44100.0;
+    juce::int64 sourceOffset = 0;         // in source samples
+    juce::int64 sourceLength = 0;         // in source samples
     SharedAudio playbackAudio;            // converted to the project's sample rate
     std::shared_ptr<const Waveform> waveform;
 
-    double getLengthSeconds() const noexcept { return sourceAudio->getNumSamples() / sourceSampleRate; }
+    double getLengthSeconds() const noexcept { return (double) sourceLength / sourceSampleRate; }
     double getEndSeconds() const noexcept    { return startSeconds + getLengthSeconds(); }
 };
 
@@ -68,8 +74,8 @@ public:
     const std::vector<Track>& getTracks() const noexcept { return tracks; }
     const Track* findTrack (int trackId) const noexcept;
 
-    /** Adds a track at the bottom and returns its id. */
-    int addTrack (const juce::String& name = {});
+    /** Adds a track at the bottom and returns its id. A negative colour index picks the next colour. */
+    int addTrack (const juce::String& name = {}, int colourIndex = -1);
     void removeTrack (int trackId);
     void renameTrack (int trackId, const juce::String& newName);
     void setTrackMuted (int trackId, bool shouldBeMuted);
@@ -85,11 +91,18 @@ public:
     int addClip (int trackId, const juce::String& name, SharedAudio audio, double audioSampleRate, double startSeconds);
 
     void moveClip (int trackId, int clipId, double newStartSeconds);
+    void renameClip (int trackId, int clipId, const juce::String& newName);
+
+    /** Chooses which part of the source audio a clip plays. The range is clamped to the audio. */
+    void setClipSourceRange (int trackId, int clipId, juce::int64 offset, juce::int64 length);
 
     /** Moves a clip onto a different track (or the same one) at a new time. */
     void moveClipToTrack (int fromTrackId, int clipId, int toTrackId, double newStartSeconds);
 
     void removeClip (int trackId, int clipId);
+
+    /** Removes every track. */
+    void clear();
 
     // Timing -------------------------------------------------------------------
     /** Converts every clip to a new playback rate, e.g. after the audio device changes. */
