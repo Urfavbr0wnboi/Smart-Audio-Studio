@@ -28,7 +28,6 @@ namespace
 
 LevelMeter::LevelMeter (ChannelParams& p) : params (p)
 {
-    setInterceptsMouseClicks (false, false);
     startTimerHz (refreshHz);
 }
 

@@ -20,7 +20,9 @@ struct PlaybackGraph
     struct Clip
     {
         SharedAudio audio;              // already at the engine's sample rate
-        juce::int64 startSample = 0;
+        juce::int64 startSample = 0;    // where the clip starts on the timeline
+        juce::int64 sourceOffset = 0;   // the first sample of `audio` to play
+        juce::int64 length = 0;         // how many samples of `audio` to play
     };
 
     struct Track

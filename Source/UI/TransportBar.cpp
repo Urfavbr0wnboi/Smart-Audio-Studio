@@ -22,7 +22,9 @@ void IconButton::setIcon (Icon newIcon)
 
 void IconButton::paintButton (juce::Graphics& g, bool isHighlighted, bool isDown)
 {
-    getLookAndFeel().drawButtonBackground (g, *this, Theme::panelRaised, isHighlighted, isDown);
+    const auto isActiveRecord = icon == Icon::record && getToggleState();
+    getLookAndFeel().drawButtonBackground (g, *this, isActiveRecord ? Theme::error.withAlpha (0.3f) : Theme::panelRaised,
+                                           isHighlighted, isDown);
 
     const auto area = getLocalBounds().toFloat().withSizeKeepingCentre (14.0f, 14.0f);
     juce::Path path;
@@ -46,6 +48,12 @@ void IconButton::paintButton (juce::Graphics& g, bool isHighlighted, bool isDown
             path.addRectangle (area.withWidth (3.0f));
             path.addTriangle ({ area.getX() + 3.0f, area.getCentreY() }, area.getTopRight(), area.getBottomRight());
             break;
+
+        case Icon::record:
+            path.addEllipse (area.reduced (1.0f));
+            g.setColour (isActiveRecord ? Theme::error.brighter (0.3f) : Theme::error);
+            g.fillPath (path);
+            return;
     }
 
     g.setColour (icon == Icon::pause ? Theme::accent : Theme::text);
@@ -53,11 +61,19 @@ void IconButton::paintButton (juce::Graphics& g, bool isHighlighted, bool isDown
 }
 
 //==============================================================================
-TransportBar::TransportBar (MixEngine& m) : mixer (m)
+TransportBar::TransportBar (MixEngine& m, ChannelParams& inputLevels)
+    : mixer (m), inputMeter (inputLevels)
 {
-    toStartButton.onClick = [this] { returnToStart(); };
-    playButton.onClick    = [this] { togglePlayback(); };
-    stopButton.onClick    = [this] { stop(); };
+    const auto call = [] (const std::function<void()>& callback) { if (callback) callback(); };
+
+    fileButton.setTooltip ("New, open and save projects");
+    fileButton.onClick     = [this] { if (onShowFileMenu) onShowFileMenu (fileButton); };
+    toStartButton.onClick  = [this, call] { call (onReturnToStart); };
+    playButton.onClick     = [this, call] { call (onPlayPause); };
+    stopButton.onClick     = [this, call] { call (onStop); };
+    recordButton.onClick   = [this, call] { call (onRecord); };
+    recordButton.setTooltip ("Record (R): records your microphone onto the selected track, starting at the playhead");
+    inputMeter.setTooltip ("Microphone level. If it doesn't move when you speak, check Audio Settings");
 
     clock.setFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 22.0f, juce::Font::plain));
     clock.setJustificationType (juce::Justification::centred);
@@ -87,7 +103,8 @@ TransportBar::TransportBar (MixEngine& m) : mixer (m)
     deviceLabel.setMinimumHorizontalScale (0.6f);
 
     for (juce::Component* c : std::initializer_list<juce::Component*> {
-             &toStartButton, &playButton, &stopButton, &clock, &addTrackButton, &importButton,
+             &fileButton, &toStartButton, &playButton, &stopButton, &recordButton, &inputMeter, &clock,
+             &addTrackButton, &importButton,
              &browserButton, &mixerButton, &settingsButton, &statusLabel, &deviceLabel })
     {
         c->setWantsKeyboardFocus (false);
@@ -117,29 +134,10 @@ void TransportBar::setDeviceDescription (const juce::String& description, bool i
     deviceLabel.setColour (juce::Label::textColourId, isProblem ? Theme::error : Theme::textDim);
 }
 
-void TransportBar::togglePlayback()
+void TransportBar::setRecording (bool isRecording)
 {
-    if (mixer.isPlaying())
-        mixer.pause();
-    else
-        mixer.play();
-
-    refreshPlayButton();
-}
-
-void TransportBar::stop()
-{
-    // Pressing stop while already stopped returns to the start, as in most DAWs.
-    if (! mixer.isPlaying())
-        mixer.setPosition (0);
-
-    mixer.pause();
-    refreshPlayButton();
-}
-
-void TransportBar::returnToStart()
-{
-    mixer.setPosition (0);
+    recordButton.setToggleState (isRecording, juce::dontSendNotification);
+    recordButton.setTooltip (isRecording ? "Stop recording (R)" : "Record (R)");
 }
 
 juce::String TransportBar::formatTime (double seconds)
@@ -190,9 +188,12 @@ void TransportBar::resized()
         area.removeFromLeft (gapAfter);
     };
 
+    place (fileButton, 52, 12);
     place (toStartButton, 36);
     place (playButton, 36);
-    place (stopButton, 36, 10);
+    place (stopButton, 36);
+    place (recordButton, 36, 4);
+    place (inputMeter, 10, 10);
     place (clock, 130, 16);
     place (addTrackButton, 80);
     place (importButton, 104, 16);

@@ -10,6 +10,7 @@ namespace sas
 
 /** A stereo peak meter that reads the levels the audio thread stores in a ChannelParams. */
 class LevelMeter final : public juce::Component,
+                         public juce::SettableTooltipClient,
                          private juce::Timer
 {
 public:
